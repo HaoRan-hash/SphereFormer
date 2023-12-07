@@ -163,7 +163,8 @@ def main_worker(gpu, ngpus_per_node, argss):
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).cuda()
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
     else:
-        model = torch.nn.DataParallel(model.cuda())
+        # model = torch.nn.DataParallel(model.cuda())
+        model = model.cuda()
 
     if main_process():
         logger.info("=> creating model ...")
@@ -250,6 +251,7 @@ def main_worker(gpu, ngpus_per_node, argss):
             use_tta=args.use_tta,
             vote_num=args.vote_num,
         )
+        # temp = train_data[0]
 
     elif args.data_name == 'waymo':
         train_data = Waymo(args.data_root, 
@@ -322,6 +324,8 @@ def main_worker(gpu, ngpus_per_node, argss):
             use_tta=args.use_tta,
             vote_num=args.vote_num,
         )
+        # temp = val_data[0]
+        # temp = val_data[1]
     elif args.data_name == 'waymo':
         val_data = Waymo(data_path=args.data_root, 
             voxel_size=args.voxel_size, 
@@ -495,7 +499,7 @@ def train(train_loader, model, criterion, optimizer, epoch, scaler, scheduler, g
         use_amp = args.use_amp
         with torch.cuda.amp.autocast(enabled=use_amp):
             
-            output = model(sinput, xyz, batch)
+            output = model(sinput, xyz, batch)   # output.shape = (n, num_class)
             assert output.shape[1] == args.classes
 
             if target.shape[-1] == 1:
@@ -521,6 +525,7 @@ def train(train_loader, model, criterion, optimizer, epoch, scaler, scheduler, g
         if args.scheduler_update == 'step':
             scheduler.step()
 
+        # 下面都是算指标的
         output = output.max(1)[1]
         n = coord.size(0)
         if args.multiprocessing_distributed:

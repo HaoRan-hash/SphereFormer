@@ -6,6 +6,8 @@ import torch
 import yaml
 import pickle
 from util.data_util import data_prepare
+import scipy
+
 
 #Elastic distortion
 def elastic(x, gran, mag):
@@ -130,7 +132,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
             rotate_rad = np.deg2rad(np.random.random() * 360) - np.pi
             c, s = np.cos(rotate_rad), np.sin(rotate_rad)
             j = np.matrix([[c, s], [-s, c]])
-            points[:, :2] = np.dot(points[:, :2], j)
+            points[:, :2] = np.dot(points[:, :2], j)   # 只对xy做旋转
 
         # random data augmentation by flip x , y or x+y
         if self.flip_aug:
@@ -145,7 +147,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
             elif flip_type == 3:
                 points[:, :2] = -points[:, :2]
 
-        if self.scale_aug:
+        if self.scale_aug:   # 只对xy做scale
             noise_scale = np.random.uniform(self.scale_params[0], self.scale_params[1])
             points[:, 0] = noise_scale * points[:, 0]
             points[:, 1] = noise_scale * points[:, 1]
