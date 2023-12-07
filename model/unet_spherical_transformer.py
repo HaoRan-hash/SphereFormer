@@ -177,7 +177,7 @@ class UBlock(nn.Module):
 
         # transformer
         if self.indice_key_id in self.sphere_layers:
-            if self.indice_key_id in self.grad_checkpoint_layers:
+            if self.indice_key_id in self.grad_checkpoint_layers:   # 这里的if是为了节约显存
                 def run(feats_, xyz_, batch_):
                     return self.transformer_block(feats_, xyz_, batch_)
                 transformer_features = torch.utils.checkpoint.checkpoint(run, output.features, xyz, batch)
@@ -281,7 +281,7 @@ class Semantic(nn.Module):
         :param input_map: (N), int, cuda
         '''
 
-        output = self.input_conv(input)
+        output = self.input_conv(input)   # type(output): SparseConvTensor
         output = self.unet(output, xyz, batch)
         output = self.output_layer(output)
 
