@@ -276,7 +276,7 @@ class Semantic(nn.Module):
             m.bias.data.fill_(0.0)
 
 
-    def forward(self, input, xyz, batch):
+    def forward(self, input, xyz, batch, return_feat=False):
         '''
         :param input_map: (N), int, cuda
         '''
@@ -287,5 +287,7 @@ class Semantic(nn.Module):
 
         #### semantic segmentation
         semantic_scores = self.linear(output.features)   # (N, nClass), float
+        if return_feat:
+            return output.features, semantic_scores
         return semantic_scores
 

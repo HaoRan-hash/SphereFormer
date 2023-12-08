@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import yaml
 import pickle
+import sys
+sys.path.append('/mnt/Disk16T/chenhr/SphereFormer')
 from util.data_util import data_prepare
 import scipy
 
@@ -50,6 +52,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
         pc_range=None, 
         use_tta=None,
         vote_num=4,
+        for_cvae=False
     ):
         super().__init__()
         self.num_classes = 19
@@ -73,6 +76,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
         self.elastic_gran, self.elastic_mag = elastic_params[0], elastic_params[1]
         self.use_tta = use_tta
         self.vote_num = vote_num
+        self.for_cvae = for_cvae
 
         if split == 'train':
             splits = semkittiyaml['split']['train']
@@ -88,6 +92,9 @@ class SemanticKITTI(torch.utils.data.Dataset):
         self.files = []
         for i_folder in splits:
             self.files += sorted(glob.glob(os.path.join(data_path, "sequences", str(i_folder).zfill(2), 'velodyne', "*.bin")))
+        
+        if self.for_cvae:
+            self.files = list(filter(lambda x: '000000' not in x, self.files))
 
         if isinstance(voxel_size, list):
             voxel_size = np.array(voxel_size).astype(np.float32)
@@ -169,7 +176,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
             points[:, 0:3] = elastic(points[:, 0:3], self.elastic_gran[1], self.elastic_mag[1])
         
         # random drop scene flow
-        if (self.split == 'train' or self.split == 'trainval') and np.random.rand() < 0.2:
+        if (self.split == 'train' or self.split == 'trainval') and np.random.rand() < 0.2 and (not self.for_cvae):
             flow_data[:, :] = 0
         # ==================================================
 
@@ -188,3 +195,29 @@ class SemanticKITTI(torch.utils.data.Dataset):
                 return coords, xyz, feats, labels, inds_reconstruct
             elif self.split == 'test':
                 return coords, xyz, feats, labels, inds_reconstruct, self.files[index]
+
+
+if __name__ == '__main__':
+    train_data = SemanticKITTI('/mnt/Disk16T/chenhr/semantic_kitti', 
+        voxel_size=[0.05, 0.05, 0.05], 
+        split='train', 
+        return_ref=True, 
+        label_mapping='util/semantic-kitti.yaml', 
+        rotate_aug=True, 
+        flip_aug=True, 
+        scale_aug=True, 
+        scale_params=[0.95,1.05], 
+        transform_aug=True, 
+        trans_std=[0.1, 0.1, 0.1],
+        elastic_aug=False, 
+        elastic_params=[[0.12, 0.4], [0.8, 3.2]], 
+        ignore_label=255, 
+        voxel_max=120000, 
+        xyz_norm=False,
+        pc_range=[[-51.2, -51.2, -4], [51.2, 51.2, 2.4]], 
+        use_tta=False,
+        vote_num=4,
+        for_cvae=True
+    )
+    
+    temp = train_data[0]
