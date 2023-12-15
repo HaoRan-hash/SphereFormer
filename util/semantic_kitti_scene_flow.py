@@ -52,7 +52,8 @@ class SemanticKITTI(torch.utils.data.Dataset):
         pc_range=None, 
         use_tta=None,
         vote_num=4,
-        for_cvae=False
+        for_cvae=False,
+        for_finetune=False
     ):
         super().__init__()
         self.num_classes = 19
@@ -77,6 +78,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
         self.use_tta = use_tta
         self.vote_num = vote_num
         self.for_cvae = for_cvae
+        self.for_finetune = for_finetune
 
         if split == 'train':
             splits = semkittiyaml['split']['train']
@@ -129,6 +131,9 @@ class SemanticKITTI(torch.utils.data.Dataset):
             flow_data = np.load(file_path.replace('velodyne', 'flow')[:-3] + 'npy')
         except:
             flow_data = np.zeros((len(raw_data), 3), dtype=np.float32)
+            
+        # laser mix and polar mix (TODO)
+        
 
         points = raw_data[:, :4]
 
@@ -176,7 +181,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
             points[:, 0:3] = elastic(points[:, 0:3], self.elastic_gran[1], self.elastic_mag[1])
         
         # random drop scene flow
-        if (self.split == 'train' or self.split == 'trainval') and np.random.rand() < 0.2 and (not self.for_cvae):
+        if (self.split == 'train' or self.split == 'trainval') and (np.random.rand() < 0.2) and (not self.for_cvae) and (not self.for_finetune):
             flow_data[:, :] = 0
         # ==================================================
 
