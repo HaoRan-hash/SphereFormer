@@ -35,6 +35,8 @@ import pickle
 import yaml
 from torch_scatter import scatter_mean
 import spconv.pytorch as spconv
+from util.lovasz_loss import lovasz_softmax
+
 
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch Point Cloud Semantic Segmentation')
@@ -250,8 +252,10 @@ def main_worker(gpu, ngpus_per_node, argss):
             pc_range=args.get("pc_range", None), 
             use_tta=args.use_tta,
             vote_num=args.vote_num,
+            use_cross_da=True
         )
-        # temp = train_data[0]
+        temp = train_data[0]
+        temp = train_data[1]
 
     elif args.data_name == 'waymo':
         train_data = Waymo(args.data_root, 
@@ -324,8 +328,8 @@ def main_worker(gpu, ngpus_per_node, argss):
             use_tta=args.use_tta,
             vote_num=args.vote_num,
         )
-        # temp = val_data[0]
-        # temp = val_data[1]
+        temp = val_data[0]
+        temp = val_data[1]
     elif args.data_name == 'waymo':
         val_data = Waymo(data_path=args.data_root, 
             voxel_size=args.voxel_size, 
@@ -500,15 +504,16 @@ def train(train_loader, model, criterion, optimizer, epoch, scaler, scheduler, g
         with torch.cuda.amp.autocast(enabled=use_amp):
             
             output = model(sinput, xyz, batch)   # output.shape = (n, num_class)
+            lovasz_loss = lovasz_softmax(output.softmax(dim=-1), target, ignore=args.ignore_label)
             assert output.shape[1] == args.classes
 
             if target.shape[-1] == 1:
                 target = target[:, 0]  # for cls
 
             if loss_name == 'focal_loss':
-                loss = focal_loss(output, target, criterion.weight, args.ignore_label, args.loss_gamma)
+                loss = focal_loss(output, target, criterion.weight, args.ignore_label, args.loss_gamma) + lovasz_loss
             elif loss_name == 'ce_loss':
-                loss = criterion(output, target)
+                loss = criterion(output, target) + lovasz_loss
             else:
                 raise ValueError("such loss {} not implemented".format(loss_name))
 
