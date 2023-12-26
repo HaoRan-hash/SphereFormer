@@ -12,7 +12,7 @@ from nuscenes.utils.data_classes import Box
 from nuscenes.utils.geometry_utils import transform_matrix
 from pyquaternion import Quaternion
 
-version = 'v1.0-trainval'
+version = 'v1.0-test'
 data_path = '/mnt/Disk16T/chenhr/nuscenes'
 save_dir = '/mnt/Disk16T/chenhr/nuscenes_sphereformer'
 
@@ -139,7 +139,7 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False):
             ref_pose_rec['translation'], Quaternion(ref_pose_rec['rotation']), inverse=True,
         )
 
-        lidarseg_labels_filename = nusc.get('lidarseg', ref_sd_token)['filename']
+        lidarseg_labels_filename = ''   # test没有lidarseg
         info = {
             'lidar_path': Path(ref_lidar_path).relative_to(data_path).__str__(),
             'lidarseg_label_path': lidarseg_labels_filename,
@@ -231,8 +231,8 @@ val_scenes = set([available_scenes[available_scene_names.index(s)]['token'] for 
 
 print('%s: train scene(%d), val scene(%d)' % (version, len(train_scenes), len(val_scenes)))
 
-train_nusc_infos, val_nusc_infos = fill_trainval_infos(data_path, nusc, train_scenes, val_scenes)
-with open("{}/nuscenes_seg_infos_1sweeps_train.pkl".format(save_dir), 'wb') as f:
+train_nusc_infos, val_nusc_infos = fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=True)
+with open("{}/nuscenes_seg_infos_1sweeps_test.pkl".format(save_dir), 'wb') as f:
     pickle.dump(train_nusc_infos, f)
-with open("{}/nuscenes_seg_infos_1sweeps_val.pkl".format(save_dir), 'wb') as f:
-    pickle.dump(val_nusc_infos, f)
+# with open("{}/nuscenes_seg_infos_1sweeps_none.pkl".format(save_dir), 'wb') as f:
+#     pickle.dump(val_nusc_infos, f)
