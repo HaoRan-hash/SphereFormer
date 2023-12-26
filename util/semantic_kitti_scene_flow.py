@@ -9,6 +9,13 @@ import sys
 sys.path.append('/mnt/Disk16T/chenhr/SphereFormer')
 from util.data_util import data_prepare
 import scipy
+from util.laser_mix import lasermix_aug
+from util.polar_mix import polarmix
+
+
+# used for polarmix
+instance_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+Omega = [np.random.random() * np.pi * 2 / 3, (np.random.random() + 1) * np.pi * 2 / 3]
 
 
 #Elastic distortion
@@ -29,6 +36,19 @@ def elastic(x, gran, mag):
     def g(x_):
         return np.hstack([i(x_)[:,None] for i in interp])
     return x + g(x) * mag
+
+
+def get_kitti_points_ringID(points):
+    scan_x = points[:, 0]
+    scan_y = points[:, 1]
+    yaw = -np.arctan2(scan_y, -scan_x)
+    proj_x = 0.5 * (yaw / np.pi + 1.0)
+    new_raw = np.nonzero((proj_x[1:] < 0.2) * (proj_x[:-1] > 0.8))[0] + 1
+    proj_y = np.zeros_like(proj_x)
+    proj_y[new_raw] = 1
+    ringID = np.cumsum(proj_y)
+    ringID = np.clip(ringID, 0, 63)
+    return ringID
 
 
 class SemanticKITTI(torch.utils.data.Dataset):
@@ -52,6 +72,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
         pc_range=None, 
         use_tta=None,
         vote_num=4,
+        use_cross_da=False,
         for_cvae=False,
         for_finetune=False
     ):
@@ -77,6 +98,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
         self.elastic_gran, self.elastic_mag = elastic_params[0], elastic_params[1]
         self.use_tta = use_tta
         self.vote_num = vote_num
+        self.use_cross_da = use_cross_da
         self.for_cvae = for_cvae
         self.for_finetune = for_finetune
 
@@ -97,6 +119,9 @@ class SemanticKITTI(torch.utils.data.Dataset):
         
         if self.for_cvae:
             self.files = list(filter(lambda x: '000000' not in x, self.files))
+        
+        self.files_another = self.files.copy()
+        random.shuffle(self.files_another)
 
         if isinstance(voxel_size, list):
             voxel_size = np.array(voxel_size).astype(np.float32)
@@ -131,11 +156,45 @@ class SemanticKITTI(torch.utils.data.Dataset):
             flow_data = np.load(file_path.replace('velodyne', 'flow')[:-3] + 'npy')
         except:
             flow_data = np.zeros((len(raw_data), 3), dtype=np.float32)
-            
-        # laser mix and polar mix (TODO)
+        raw_data = np.concatenate((raw_data, flow_data), axis=1)   # (n, 7)
         
+        # laser mix and polar mix
+        if self.use_cross_da:
+            file_path_2 = self.files_another[index]
+            raw_data_2 = np.fromfile(file_path_2, dtype=np.float32).reshape((-1, 4))
+            annotated_data_2 = np.fromfile(file_path_2.replace('velodyne', 'labels')[:-3] + 'label',
+                                    dtype=np.uint32).reshape((-1, 1))
+            annotated_data_2 = annotated_data_2 & 0xFFFF  # delete high 16 digits binary
+            annotated_data_2 = np.vectorize(self.learning_map.__getitem__)(annotated_data_2)
 
-        points = raw_data[:, :4]
+            try:
+                flow_data_2 = np.load(file_path_2.replace('velodyne', 'flow')[:-3] + 'npy')
+            except:
+                flow_data_2 = np.zeros((len(raw_data_2), 3), dtype=np.float32)
+            raw_data_2 = np.concatenate((raw_data_2, flow_data_2), axis=1)
+            assert len(annotated_data_2) == len(raw_data_2)   # (n_2, 7)
+            
+            prob = np.random.choice(2, 1)
+            if prob == 1:   # laser mix
+                raw_data, annotated_data = lasermix_aug(
+                    raw_data,
+                    annotated_data,
+                    raw_data_2,
+                    annotated_data_2,
+                )
+            elif prob == 0:
+                alpha = (np.random.random() - 1) * np.pi
+                beta = alpha + np.pi
+                annotated_data = annotated_data.reshape(-1)
+                annotated_data_2 = annotated_data_2.reshape(-1)
+                raw_data, annotated_data = polarmix(
+                    raw_data, annotated_data, raw_data_2, annotated_data_2,
+                    alpha=alpha, beta=beta,
+                    instance_classes=instance_classes, Omega=Omega
+                )
+                annotated_data = annotated_data.reshape(-1, 1)
+        
+        points = raw_data
 
         if self.split != 'test':
             annotated_data[annotated_data == 0] = self.ignore_label + 1
@@ -182,10 +241,10 @@ class SemanticKITTI(torch.utils.data.Dataset):
         
         # random drop scene flow
         if (self.split == 'train' or self.split == 'trainval') and (np.random.rand() < 0.2) and (not self.for_cvae) and (not self.for_finetune):
-            flow_data[:, :] = 0
+            points[:, -3:] = 0
         # ==================================================
 
-        feats = np.concatenate((points, flow_data), axis=1)
+        feats = points   # (n', 7)
         xyz = points[:, :3]
 
         if self.pc_range is not None:
