@@ -50,7 +50,7 @@ class nuScenes(torch.utils.data.Dataset):
         with open("util/nuscenes.yaml", 'r') as stream:
             self.nuscenes_dict = yaml.safe_load(stream)
 
-        self.infos = []
+        self.infos = []   # 每一个元素是一个dict
         for info_path in info_path_list:
             with open(os.path.join(data_path, info_path), 'rb') as f:
                 infos = pickle.load(f)
@@ -83,7 +83,7 @@ class nuScenes(torch.utils.data.Dataset):
             lidarseg_label_path = os.path.join(self.data_path, info['lidarseg_label_path'])
             annotated_data = np.fromfile(str(lidarseg_label_path), dtype=np.uint8, count=-1).reshape([-1])
             annotated_data = np.vectorize(self.nuscenes_dict['learning_map'].get)(annotated_data)
-            annotated_data[annotated_data == 0] = self.ignore_label + 1
+            annotated_data[annotated_data == 0] = self.ignore_label + 1   # 忽略第0类
             annotated_data = annotated_data - 1
             labels_in = annotated_data.astype(np.uint8)
         else:
@@ -122,7 +122,7 @@ class nuScenes(torch.utils.data.Dataset):
             points[:, 0:3] += noise_translate
         # ==================================================
 
-        if self.return_ref:
+        if self.return_ref:   # 最后一维的时间戳信息不当作特征
             feats = points[:, :4]
         else:
             feats = points[:, :3]
