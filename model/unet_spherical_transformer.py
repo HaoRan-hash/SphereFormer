@@ -54,6 +54,11 @@ def get_downsample_info(xyz, batch, indice_pairs):
     pair_in, pair_out = indice_pairs[0], indice_pairs[1]
     valid_mask = (pair_in != -1)
     valid_pair_in, valid_pair_out = pair_in[valid_mask].long(), pair_out[valid_mask].long()
+    # debug
+    # print(f'{xyz[valid_pair_in].shape}, {valid_pair_out.shape}')
+    # print(f'{valid_pair_out.max()}, {valid_pair_out.min()}')
+    # print(f'{(valid_pair_out == valid_pair_out.min()).float().sum()}')
+    
     xyz_next = scatter_mean(xyz[valid_pair_in], index=valid_pair_out, dim=0)
     batch_next = scatter_mean(batch.float()[valid_pair_in], index=valid_pair_out, dim=0)
     return xyz_next, batch_next

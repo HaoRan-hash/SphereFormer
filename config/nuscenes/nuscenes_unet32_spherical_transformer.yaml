@@ -1,6 +1,6 @@
 DATA:
   data_name: nuscenes
-  data_root: YOUR_DATA_ROOT # Fill in the data path 
+  data_root: /mnt/Disk16T/chenhr/nuscenes
   label_mapping: util/nuscenes.yaml
   classes: 16 
   fea_dim: 6
@@ -27,6 +27,7 @@ TRAIN:
   max_batch_points: 250000
 
   xyz_norm: False
+  pc_range: [[-51.2, -51.2, -5], [51.2, 51.2, 3.4]]
   window_size_sphere: [2, 2, 120]
   window_size_scale: [2.0, 2.0]
   sphere_layers: [1,2,3,4,5]
@@ -43,7 +44,7 @@ TRAIN:
   scheduler: Poly
   power: 0.9
   use_amp: True
-  train_gpu: [0,1,2,3] 
+  train_gpu: [4, 5] 
   workers: 16  # data loader workers
   batch_size: 16  # batch size for training
   batch_size_val: 8  # batch size for validation during training, memory and speed tradeoff
