@@ -88,6 +88,40 @@ def collation_fn_voxelmean_tta(batch_list):
 
     return samples
 
+
+def collation_fn_voxelmean_tta_name(batch_list):
+    """
+    :param batch:
+    :return:   coords_batch: N x 4 (x,y,z,batch)
+
+    """
+    samples = []
+    batch_list = list(zip(*batch_list))
+
+    for batch in batch_list:
+        coords, xyz, feats, labels, inds_recons, names = list(zip(*batch))
+        inds_recons = list(inds_recons)
+
+        accmulate_points_num = 0
+        offset = []
+        for i in range(len(coords)):
+            inds_recons[i] = accmulate_points_num + inds_recons[i]
+            accmulate_points_num += coords[i].shape[0]
+            offset.append(accmulate_points_num)
+
+        coords = torch.cat(coords)
+        xyz = torch.cat(xyz)
+        feats = torch.cat(feats)
+        labels = torch.cat(labels)
+        offset = torch.IntTensor(offset)
+        inds_recons = torch.cat(inds_recons)
+
+        sample = (coords, xyz, feats, labels, offset, inds_recons, names)
+        samples.append(sample)
+
+    return samples
+
+
 def data_prepare(coord, feat, label, split='train', voxel_size=np.array([0.1, 0.1, 0.1]), voxel_max=None, transform=None, xyz_norm=False):
     if transform:
         # coord, feat, label = transform(coord, feat, label)
@@ -95,7 +129,7 @@ def data_prepare(coord, feat, label, split='train', voxel_size=np.array([0.1, 0.
     coord_min = np.min(coord, 0)
     # coord -= coord_min
     coord_norm = coord - coord_min
-    if split == 'train':
+    if split == 'train' or split == 'trainval':
         uniq_idx = voxelize(coord_norm, voxel_size)
         coord_voxel = np.floor(coord_norm[uniq_idx] / np.array(voxel_size))
         coord, feat, label = coord[uniq_idx], feat[uniq_idx], label[uniq_idx]
@@ -114,7 +148,7 @@ def data_prepare(coord, feat, label, split='train', voxel_size=np.array([0.1, 0.
     coord = torch.FloatTensor(coord)
     feat = torch.FloatTensor(feat)
     label = torch.LongTensor(label)
-    if split == 'train':
+    if split == 'train' or split == 'trainval':
         coord_voxel = torch.LongTensor(coord_voxel)
         return coord_voxel, coord, feat, label
     else:

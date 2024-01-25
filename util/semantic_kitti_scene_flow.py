@@ -146,10 +146,13 @@ class SemanticKITTI(torch.utils.data.Dataset):
         file_path = self.files[index]
 
         raw_data = np.fromfile(file_path, dtype=np.float32).reshape((-1, 4))
-        annotated_data = np.fromfile(file_path.replace('velodyne', 'labels')[:-3] + 'label',
-                                        dtype=np.uint32).reshape((-1, 1))
-        annotated_data = annotated_data & 0xFFFF  # delete high 16 digits binary
-        annotated_data = np.vectorize(self.learning_map.__getitem__)(annotated_data)
+        if self.split != 'test':
+            annotated_data = np.fromfile(file_path.replace('velodyne', 'labels')[:-3] + 'label',
+                                            dtype=np.uint32).reshape((-1, 1))
+            annotated_data = annotated_data & 0xFFFF  # delete high 16 digits binary
+            annotated_data = np.vectorize(self.learning_map.__getitem__)(annotated_data)
+        else:
+            annotated_data = np.zeros((raw_data.shape[0], 1)).astype(np.int64)
         
         # load scene flow
         try:
@@ -162,10 +165,13 @@ class SemanticKITTI(torch.utils.data.Dataset):
         if self.use_cross_da:
             file_path_2 = self.files_another[index]
             raw_data_2 = np.fromfile(file_path_2, dtype=np.float32).reshape((-1, 4))
-            annotated_data_2 = np.fromfile(file_path_2.replace('velodyne', 'labels')[:-3] + 'label',
-                                    dtype=np.uint32).reshape((-1, 1))
-            annotated_data_2 = annotated_data_2 & 0xFFFF  # delete high 16 digits binary
-            annotated_data_2 = np.vectorize(self.learning_map.__getitem__)(annotated_data_2)
+            if self.split != 'test':
+                annotated_data_2 = np.fromfile(file_path_2.replace('velodyne', 'labels')[:-3] + 'label',
+                                        dtype=np.uint32).reshape((-1, 1))
+                annotated_data_2 = annotated_data_2 & 0xFFFF  # delete high 16 digits binary
+                annotated_data_2 = np.vectorize(self.learning_map.__getitem__)(annotated_data_2)
+            else:
+                annotated_data_2 = np.zeros((raw_data_2.shape[0], 1)).astype(np.int64)
 
             try:
                 flow_data_2 = np.load(file_path_2.replace('velodyne', 'flow')[:-3] + 'npy')
@@ -250,7 +256,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
         if self.pc_range is not None:
             xyz = np.clip(xyz, self.pc_range[0], self.pc_range[1])
 
-        if self.split == 'train':
+        if self.split == 'train' or self.split == 'trainval':
             coords, xyz, feats, labels = data_prepare(xyz, feats, labels_in, self.split, self.voxel_size, self.voxel_max, None, self.xyz_norm)
             return coords, xyz, feats, labels
         else:
