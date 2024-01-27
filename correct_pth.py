@@ -177,12 +177,17 @@ def main_worker(gpu, ngpus_per_node, argss):
         filename = args.save_path + '/model/model_best_correct.pth'
         logger.info('Saving checkpoint to: ' + filename)
         if args.distributed:
+            # torch.save({'epoch': checkpoint['epoch'], 'state_dict': model.module.state_dict(), 'optimizer': checkpoint['optimizer'],
+            #             'scheduler': checkpoint['scheduler'], 'best_iou': checkpoint['best_iou'], 'is_best': checkpoint['is_best']}, filename)
+            # for infer
             torch.save({'epoch': checkpoint['epoch'], 'state_dict': model.module.state_dict(), 'optimizer': checkpoint['optimizer'],
-                        'scheduler': checkpoint['scheduler'], 'best_iou': checkpoint['best_iou'], 'is_best': checkpoint['is_best']}, filename)
+                        'scheduler': checkpoint['scheduler'], 'mIoU_train': checkpoint['mIoU_train']}, filename)
         else:
+            # torch.save({'epoch': checkpoint['epoch'], 'state_dict': model.state_dict(), 'optimizer': checkpoint['optimizer'],
+            #             'scheduler': checkpoint['scheduler'], 'best_iou': checkpoint['best_iou'], 'is_best': checkpoint['is_best']}, filename)
+            # for infer
             torch.save({'epoch': checkpoint['epoch'], 'state_dict': model.state_dict(), 'optimizer': checkpoint['optimizer'],
-                        'scheduler': checkpoint['scheduler'], 'best_iou': checkpoint['best_iou'], 'is_best': checkpoint['is_best']}, filename)
-
+                        'scheduler': checkpoint['scheduler'], 'mIoU_train': checkpoint['mIoU_train']}, filename)
 
 if __name__ == '__main__':
     import gc

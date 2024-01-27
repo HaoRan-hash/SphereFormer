@@ -205,7 +205,7 @@ def main_worker(gpu, ngpus_per_node, argss):
             model.load_state_dict(checkpoint['state_dict'], strict=True)
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler_state_dict = checkpoint['scheduler']
-            best_iou = checkpoint['best_iou']
+            mIoU_train = checkpoint['mIoU_train']
             if main_process():
                 logger.info("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
         else:

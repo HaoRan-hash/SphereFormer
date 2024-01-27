@@ -99,4 +99,5 @@ data/val
 *.png
 debug/
 spconv/
-
+kitti_submit/
+nuscenes_submit/

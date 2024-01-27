@@ -197,7 +197,7 @@ class nuScenes(torch.utils.data.Dataset):
         if self.pc_range is not None:
             xyz = np.clip(xyz, self.pc_range[0], self.pc_range[1])
 
-        if self.split == 'train':
+        if self.split == 'train' or self.split == 'trainval':
             coords, xyz, feats, labels = data_prepare(xyz, feats, labels_in, self.split, self.voxel_size, self.voxel_max, None, self.xyz_norm)
             return coords, xyz, feats, labels
         else:
@@ -205,4 +205,4 @@ class nuScenes(torch.utils.data.Dataset):
             if self.split == 'val':
                 return coords, xyz, feats, labels, inds_reconstruct
             elif self.split == 'test':
-                return coords, xyz, feats, labels, inds_reconstruct, info['lidar_sample_token']
+                return coords, xyz, feats, labels, inds_reconstruct, info['token']

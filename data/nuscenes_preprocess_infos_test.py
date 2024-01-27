@@ -14,7 +14,7 @@ from pyquaternion import Quaternion
 
 version = 'v1.0-test'
 data_path = '/mnt/Disk16T/chenhr/nuscenes'
-save_dir = '/mnt/Disk16T/chenhr/nuscenes_sphereformer'
+save_dir = '/mnt/Disk16T/chenhr/nuscenes'
 
 map_name_from_general_to_detection = {
     'human.pedestrian.adult': 'pedestrian',
@@ -145,7 +145,7 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False):
             'lidarseg_label_path': lidarseg_labels_filename,
             'cam_front_path': Path(ref_cam_path).relative_to(data_path).__str__(),
             'cam_intrinsic': ref_cam_intrinsic,
-            'token': sample['token'],
+            'token': ref_sd_token,
             'sweeps': [],
             'ref_from_car': ref_from_car,
             'car_from_global': car_from_global,
