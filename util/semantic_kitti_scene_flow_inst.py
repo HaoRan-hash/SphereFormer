@@ -9,8 +9,8 @@ import sys
 sys.path.append('/mnt/Disk16T/chenhr/SphereFormer')
 from util.data_util import data_prepare
 import scipy
-from util.laser_mix import lasermix_aug
-from util.polar_mix import polarmix
+from util.laser_mix_inst import lasermix_aug
+from util.polar_mix_inst import polarmix
 from util.instance_augmentation import instance_augmentation
 from pathlib import Path
 
@@ -132,17 +132,17 @@ class SemanticKITTI(torch.utils.data.Dataset):
         self.voxel_size = voxel_size
         
         # get class distribution weight 
-        # epsilon_w = 0.001
-        # origin_class = semkittiyaml['content'].keys()
-        # weights = np.zeros((len(semkittiyaml['learning_map_inv'])-1,),dtype = np.float32)
-        # for class_num in origin_class:
-        #     if semkittiyaml['learning_map'][class_num] != 0:
-        #         weights[semkittiyaml['learning_map'][class_num]-1] += semkittiyaml['content'][class_num]
-        # self.CLS_LOSS_WEIGHT = 1/(weights + epsilon_w)
+        epsilon_w = 0.001
+        origin_class = semkittiyaml['content'].keys()
+        weights = np.zeros((len(semkittiyaml['learning_map_inv'])-1,),dtype = np.float32)
+        for class_num in origin_class:
+            if semkittiyaml['learning_map'][class_num] != 0:
+                weights[semkittiyaml['learning_map'][class_num]-1] += semkittiyaml['content'][class_num]
+        self.CLS_LOSS_WEIGHT = 1/(weights + epsilon_w)
         
-        # if self.instance_aug:
-        #     self.inst_aug = instance_augmentation(data_path + '/instance_path.pkl', instance_classes, self.CLS_LOSS_WEIGHT,
-        #                                           random_flip=True, random_add=True, random_rotate=True, local_transformation=True)
+        if self.instance_aug:
+            self.inst_aug = instance_augmentation(data_path + '/instance_path.pkl', instance_classes, self.CLS_LOSS_WEIGHT,
+                                                  random_flip=True, random_add=True, random_rotate=True, local_transformation=True)
 
     def __len__(self):
         'Denotes the total number of samples'
@@ -166,7 +166,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
         if self.split != 'test':
             annotated_data = np.fromfile(file_path.replace('velodyne', 'labels')[:-3] + 'label',
                                             dtype=np.uint32).reshape((-1, 1))
-            # inst_data = annotated_data.copy()
+            inst_data = annotated_data.copy()
             annotated_data = annotated_data & 0xFFFF  # delete high 16 digits binary
             annotated_data = np.vectorize(self.learning_map.__getitem__)(annotated_data)
         else:
@@ -178,11 +178,6 @@ class SemanticKITTI(torch.utils.data.Dataset):
         except:
             flow_data = np.zeros((len(raw_data), 3), dtype=np.float32)
         raw_data = np.concatenate((raw_data, flow_data), axis=1)   # (n, 7)
-        
-        # # instance aug
-        # if self.instance_aug:
-        #     xyz, annotated_data, _, feat = self.inst_aug.instance_aug(raw_data[:, 0:3], annotated_data.squeeze(), inst_data.squeeze(), raw_data[:, 3:])
-        #     raw_data = np.concatenate((xyz, feat), axis=1)
             
         # laser mix and polar mix
         if self.use_cross_da:
@@ -191,6 +186,7 @@ class SemanticKITTI(torch.utils.data.Dataset):
             if self.split != 'test':
                 annotated_data_2 = np.fromfile(file_path_2.replace('velodyne', 'labels')[:-3] + 'label',
                                         dtype=np.uint32).reshape((-1, 1))
+                inst_data_2 = annotated_data_2.copy()
                 annotated_data_2 = annotated_data_2 & 0xFFFF  # delete high 16 digits binary
                 annotated_data_2 = np.vectorize(self.learning_map.__getitem__)(annotated_data_2)
             else:
@@ -205,32 +201,30 @@ class SemanticKITTI(torch.utils.data.Dataset):
             
             prob = np.random.choice(2, 1)
             if prob == 1:   # laser mix
-                raw_data, annotated_data = lasermix_aug(
+                raw_data, annotated_data, inst_data = lasermix_aug(
                     raw_data,
                     annotated_data,
+                    inst_data,
                     raw_data_2,
                     annotated_data_2,
+                    inst_data_2
                 )
             elif prob == 0:
                 alpha = (np.random.random() - 1) * np.pi
                 beta = alpha + np.pi
                 annotated_data = annotated_data.reshape(-1)
                 annotated_data_2 = annotated_data_2.reshape(-1)
-                raw_data, annotated_data = polarmix(
-                    raw_data, annotated_data, raw_data_2, annotated_data_2,
+                inst_data = inst_data.reshape(-1)
+                inst_data_2 = inst_data_2.reshape(-1)
+                raw_data, annotated_data, inst_data = polarmix(
+                    raw_data, annotated_data, inst_data, raw_data_2, annotated_data_2, inst_data_2,
                     alpha=alpha, beta=beta,
                     instance_classes=instance_classes, Omega=Omega
                 )
                 annotated_data = annotated_data.reshape(-1, 1)
+                inst_data = inst_data.reshape(-1, 1)
         
         points = raw_data
-
-        if self.split != 'test':
-            annotated_data[annotated_data == 0] = self.ignore_label + 1
-            annotated_data = annotated_data - 1
-            labels_in = annotated_data.astype(np.uint8).reshape(-1)
-        else:
-            labels_in = np.zeros(points.shape[0]).astype(np.uint8)
 
         # Augmentation
         # ==================================================
@@ -263,6 +257,12 @@ class SemanticKITTI(torch.utils.data.Dataset):
                                         np.random.normal(0, self.trans_std[1], 1),
                                         np.random.normal(0, self.trans_std[2], 1)]).T
             points[:, 0:3] += noise_translate
+        
+        # instance aug
+        if self.instance_aug:
+            inst_data = inst_data.astype(np.uint32)
+            xyz, annotated_data, _, feat = self.inst_aug.instance_aug(points[:, 0:3], annotated_data.squeeze(), inst_data.squeeze(), points[:, 3:])
+            points = np.concatenate((xyz, feat), axis=1)
             
         if self.elastic_aug:
             points[:, 0:3] = elastic(points[:, 0:3], self.elastic_gran[0], self.elastic_mag[0])
@@ -272,6 +272,13 @@ class SemanticKITTI(torch.utils.data.Dataset):
         if (self.split == 'train' or self.split == 'trainval') and (np.random.rand() < 0.2) and (not self.for_cvae) and (not self.for_finetune):
             points[:, -3:] = 0
         # ==================================================
+        
+        if self.split != 'test':
+            annotated_data[annotated_data == 0] = self.ignore_label + 1
+            annotated_data = annotated_data - 1
+            labels_in = annotated_data.astype(np.uint8).reshape(-1)
+        else:
+            labels_in = np.zeros(points.shape[0]).astype(np.uint8)
 
         feats = points   # (n', 7)
         xyz = points[:, :3]
@@ -309,7 +316,8 @@ if __name__ == '__main__':
         xyz_norm=False,
         pc_range=[[-51.2, -51.2, -4], [51.2, 51.2, 2.4]], 
         use_tta=False,
-        use_cross_da=True
+        use_cross_da=True,
+        instance_aug=True
     )
     
     save_dir = Path('test/no_inst_aug')
